@@ -13,14 +13,18 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  const navigate = useNavigate();
+
   const handleLogin = () => {
     console.log("Login:", username, password);
+    alert("Login Successful! Redirecting to Dashboard...");
+    navigate("/dashboard");
   };
 
   return (

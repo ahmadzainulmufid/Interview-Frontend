@@ -20,7 +20,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Register = () => {
   const [username, setUsername] = useState("");
@@ -38,8 +38,12 @@ const Register = () => {
     event.preventDefault();
   };
 
+  const navigate = useNavigate();
+
   const handleRegister = async () => {
     console.log("Register Data:", { username, email, password });
+    alert("Registrasi Berhasil! Mengalihkan ke halaman Login...");
+    navigate("/login");
   };
 
   return (
