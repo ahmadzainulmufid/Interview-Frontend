@@ -1,3 +1,4 @@
+// pages/Login.tsx
 import {
   CssBaseline,
   Box,
@@ -18,13 +19,57 @@ import { Link, useNavigate } from "react-router-dom";
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false); // Tambahan state loading
 
   const navigate = useNavigate();
 
-  const handleLogin = () => {
-    console.log("Login:", username, password);
-    alert("Login Successful! Redirecting to Dashboard...");
-    navigate("/dashboard");
+  const handleLogin = async () => {
+    // 1. Validasi Input
+    if (!username || !password) {
+      alert("Username dan Password wajib diisi!");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 2. Kirim Request ke Backend
+      const response = await fetch("http://127.0.0.1:5000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+
+      // 3. Cek Respon
+      if (response.ok) {
+        // --- SUKSES ---
+        console.log("Login Success:", data);
+
+        // PENTING: Simpan token ke localStorage agar browser "ingat" user sedang login
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("refresh_token", data.refresh_token);
+        // Opsional: Simpan detail user
+        localStorage.setItem("user", JSON.stringify(data.user_details));
+
+        alert(`Selamat datang kembali, ${data.user_details.username}!`);
+        navigate("/dashboard");
+      } else {
+        // --- GAGAL ---
+        alert(`❌ Login Gagal: ${data.msg}`);
+      }
+    } catch (error) {
+      console.error("Login Error:", error);
+      alert("❌ Tidak dapat terhubung ke server.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -113,6 +158,7 @@ const Login = () => {
             fullWidth
             variant="contained"
             size="large"
+            disabled={loading} // Disable tombol saat loading
             sx={{
               mt: 3,
               mb: 2,
@@ -124,7 +170,7 @@ const Login = () => {
             }}
             onClick={handleLogin}
           >
-            Login
+            {loading ? "Logging in..." : "Login"}
           </Button>
 
           <Grid container justifyContent="center">

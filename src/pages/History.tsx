@@ -1,3 +1,4 @@
+// pages/History.tsx
 import { useState } from "react";
 import {
   Box,
@@ -131,7 +132,9 @@ const mockHistory: HistorySession[] = [
 const History = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [open, setOpen] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<HistorySession | null>(null);
+  const [selectedSession, setSelectedSession] = useState<HistorySession | null>(
+    null
+  );
 
   // Filter Data
   const filteredHistory = mockHistory.filter((item) =>

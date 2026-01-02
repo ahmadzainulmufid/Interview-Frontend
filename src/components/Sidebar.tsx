@@ -1,3 +1,4 @@
+// components/Sidebar.tsx
 import { useState } from "react";
 import {
   Box,
@@ -32,10 +33,25 @@ const Sidebar = () => {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Ambil data user dari localStorage untuk ditampilkan di Avatar/Header (Opsional)
+  const userString = localStorage.getItem("user");
+  const user = userString ? JSON.parse(userString) : { username: "User" };
+
   const isInterviewMode = location.pathname === "/interview";
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  // --- FUNGSI LOGOUT ---
+  const handleLogout = () => {
+    // 1. Hapus semua jejak login dari browser
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user");
+
+    // 2. Arahkan kembali ke halaman Login
+    navigate("/login");
   };
 
   const menuItems = [
@@ -97,7 +113,8 @@ const Sidebar = () => {
       <Divider />
       <List>
         <ListItem disablePadding>
-          <ListItemButton onClick={() => navigate("/login")}>
+          {/* Panggil handleLogout saat diklik */}
+          <ListItemButton onClick={handleLogout}>
             <ListItemIcon>
               <LogoutIcon color="error" />
             </ListItemIcon>
@@ -144,7 +161,10 @@ const Sidebar = () => {
               {menuItems.find((i) => i.path === location.pathname)?.text ||
                 "Dashboard"}
             </Typography>
-            <Avatar sx={{ bgcolor: "primary.main" }}>U</Avatar>
+            {/* Tampilkan inisial user yang login */}
+            <Avatar sx={{ bgcolor: "primary.main" }}>
+              {user.username.charAt(0).toUpperCase()}
+            </Avatar>
           </Toolbar>
         </AppBar>
       )}
@@ -200,7 +220,6 @@ const Sidebar = () => {
           bgcolor: "#f5f5f5",
         }}
       >
-        {/* SPACER TOOLBAR (Penting agar konten awal tidak tertutup Header) */}
         {!isInterviewMode && <Toolbar />}
 
         <Outlet />

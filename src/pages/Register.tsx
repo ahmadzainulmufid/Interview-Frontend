@@ -1,10 +1,11 @@
+// pages/Register.tsx
 import {
   CssBaseline,
   Box,
   Typography,
   TextField,
   Button,
-  Grid as Grid,
+  Grid,
   Paper,
   Avatar,
   InputAdornment,
@@ -27,6 +28,7 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false); // Tambahan state loading
 
   const [showPassword, setShowPassword] = useState(false);
 
@@ -40,10 +42,56 @@ const Register = () => {
 
   const navigate = useNavigate();
 
+  // --- LOGIKA UTAMA KONEKSI KE BACKEND ---
   const handleRegister = async () => {
-    console.log("Register Data:", { username, email, password });
-    alert("Registrasi Berhasil! Mengalihkan ke halaman Login...");
-    navigate("/login");
+    // 1. Validasi Client Side Sederhana
+    if (!username || !email || !password || !confirmPassword) {
+      alert("Harap isi semua kolom!");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      alert("Password dan Confirm Password tidak sama!");
+      return;
+    }
+
+    setLoading(true); // Aktifkan loading agar user tidak klik 2x
+
+    try {
+      // 2. Kirim Request ke Flask Backend
+      const response = await fetch("http://127.0.0.1:5000/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username,
+          email: email,
+          password: password,
+          // PENTING: Backend minta 'confirm_password', bukan 'confirmPassword'
+          confirm_password: confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      // 3. Cek Respon
+      if (response.ok) {
+        // Jika sukses (HTTP 201)
+        alert("✅ Registrasi Berhasil! Silakan Login.");
+        navigate("/login");
+      } else {
+        // Jika gagal (HTTP 400/409), tampilkan pesan dari backend (data.msg)
+        alert(`❌ Gagal: ${data.msg}`);
+      }
+    } catch (error) {
+      console.error("Error connecting to backend:", error);
+      alert(
+        "❌ Tidak dapat terhubung ke server. Pastikan backend Flask menyala."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -89,7 +137,8 @@ const Register = () => {
 
         <Box component="form" sx={{ width: "100%" }}>
           <Grid container spacing={2}>
-            <Grid size={12}>
+            {/* --- USERNAME --- */}
+            <Grid>
               <TextField
                 name="username"
                 required
@@ -110,7 +159,8 @@ const Register = () => {
               />
             </Grid>
 
-            <Grid size={12}>
+            {/* --- EMAIL --- */}
+            <Grid>
               <TextField
                 required
                 fullWidth
@@ -130,7 +180,8 @@ const Register = () => {
               />
             </Grid>
 
-            <Grid size={12}>
+            {/* --- PASSWORD --- */}
+            <Grid size={11.3}>
               <TextField
                 required
                 fullWidth
@@ -162,7 +213,9 @@ const Register = () => {
                 }}
               />
             </Grid>
-            <Grid size={12}>
+
+            {/* --- CONFIRM PASSWORD --- */}
+            <Grid size={11.3}>
               <TextField
                 required
                 fullWidth
@@ -200,6 +253,7 @@ const Register = () => {
             fullWidth
             variant="contained"
             size="large"
+            disabled={loading} // Disable tombol saat loading
             sx={{
               mt: 3,
               mb: 2,
@@ -212,7 +266,7 @@ const Register = () => {
             }}
             onClick={handleRegister}
           >
-            Register
+            {loading ? "Registering..." : "Register"}
           </Button>
 
           <Grid container justifyContent="center">
