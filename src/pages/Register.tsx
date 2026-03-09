@@ -10,10 +10,13 @@ import {
   Avatar,
   InputAdornment,
   IconButton,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 
 // Import Ikon
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import AppRegistrationIcon from "@mui/icons-material/AppRegistration";
 import PersonIcon from "@mui/icons-material/Person";
 import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
@@ -28,38 +31,60 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false); // Tambahan state loading
+  const [loading, setLoading] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
+
+  const navigate = useNavigate();
+
+  // --- STATE UNTUK TOAST / SNACKBAR ---
+  const [toast, setToast] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error" | "warning" | "info",
+  });
+
+  // --- FUNGSI UNTUK MENAMPILKAN TOAST ---
+  const showToast = (
+    message: string,
+    severity: "success" | "error" | "warning",
+  ) => {
+    setToast({ open: true, message, severity });
+  };
+
+  // --- FUNGSI UNTUK MENUTUP TOAST ---
+  const handleCloseToast = (
+    _event?: React.SyntheticEvent | Event,
+    reason?: string,
+  ) => {
+    if (reason === "clickaway") return;
+    setToast({ ...toast, open: false });
+  };
 
   const handleClickShowPassword = () => setShowPassword((show) => !show);
 
   const handleMouseDownPassword = (
-    event: React.MouseEvent<HTMLButtonElement>
+    event: React.MouseEvent<HTMLButtonElement>,
   ) => {
     event.preventDefault();
   };
 
-  const navigate = useNavigate();
-
   // --- LOGIKA UTAMA KONEKSI KE BACKEND ---
   const handleRegister = async () => {
-    // 1. Validasi Client Side Sederhana
     if (!username || !email || !password || !confirmPassword) {
-      alert("Harap isi semua kolom!");
+      showToast("Harap isi semua kolom!", "warning");
       return;
     }
 
     if (password !== confirmPassword) {
-      alert("Password dan Confirm Password tidak sama!");
+      showToast("Kata Sandi dan Konfirmasi Kata Sandi tidak cocok!", "error");
       return;
     }
 
-    setLoading(true); // Aktifkan loading agar user tidak klik 2x
+    setLoading(true);
 
     try {
-      // 2. Kirim Request ke Flask Backend
-      const response = await fetch("http://127.0.0.1:5000/register", {
+      const response = await fetch("http://127.0.0.1:5001/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -68,29 +93,30 @@ const Register = () => {
           username: username,
           email: email,
           password: password,
-          // PENTING: Backend minta 'confirm_password', bukan 'confirmPassword'
           confirm_password: confirmPassword,
         }),
       });
 
       const data = await response.json();
 
-      // 3. Cek Respon
       if (response.ok) {
-        // Jika sukses (HTTP 201)
-        alert("✅ Registrasi Berhasil! Silakan Login.");
-        navigate("/login");
+        showToast("Registrasi Berhasil! Silakan Masuk.", "success");
+
+        // Beri jeda sedikit sebelum pindah halaman agar toast sukses terlihat
+        setTimeout(() => {
+          navigate("/login");
+        }, 1500);
       } else {
-        // Jika gagal (HTTP 400/409), tampilkan pesan dari backend (data.msg)
-        alert(`❌ Gagal: ${data.msg}`);
+        showToast(`Gagal: ${data.msg}`, "error");
+        setLoading(false); // Matikan loading jika gagal
       }
     } catch (error) {
       console.error("Error connecting to backend:", error);
-      alert(
-        "❌ Tidak dapat terhubung ke server. Pastikan backend Flask menyala."
+      showToast(
+        "Tidak dapat terhubung ke server. Pastikan server aktif.",
+        "error",
       );
-    } finally {
-      setLoading(false);
+      setLoading(false); // Matikan loading jika error
     }
   };
 
@@ -102,13 +128,30 @@ const Register = () => {
         alignItems: "center",
         minHeight: "100vh",
         width: "100vw",
-        background: "linear-gradient(135deg, #1976d2 0%, #64b5f6 100%)",
+        backgroundColor: "#f5f5f5",
       }}
     >
       <CssBaseline />
 
+      {/* --- KOMPONEN TOAST/SNACKBAR --- */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={4000}
+        onClose={handleCloseToast}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleCloseToast}
+          severity={toast.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
+
       <Paper
-        elevation={10}
+        elevation={4}
         sx={{
           p: 4,
           width: "100%",
@@ -120,19 +163,19 @@ const Register = () => {
           backgroundColor: "#ffffff",
         }}
       >
-        <Avatar sx={{ m: 1, bgcolor: "#64b5f6", width: 56, height: 56 }}>
-          <PersonAddIcon fontSize="large" />
+        <Avatar sx={{ m: 1, bgcolor: "primary.main", width: 56, height: 56 }}>
+          <AppRegistrationIcon fontSize="large" />
         </Avatar>
 
         <Typography
           component="h1"
           variant="h5"
-          sx={{ fontWeight: "bold", mb: 1 }}
+          sx={{ fontWeight: "bold", mb: 1, mt: 1 }}
         >
-          Create Account
+          Buat Akun Baru
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Join us! Please fill in your details
+          Bergabunglah! Silakan isi data diri Anda
         </Typography>
 
         <Box component="form" sx={{ width: "100%" }}>
@@ -144,11 +187,12 @@ const Register = () => {
                 required
                 fullWidth
                 id="username"
-                label="Username"
-                placeholder="Input Username"
+                label="Nama Pengguna"
+                placeholder="Masukkan Nama Pengguna"
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                disabled={loading} // Kunci input saat loading
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -165,11 +209,12 @@ const Register = () => {
                 required
                 fullWidth
                 id="email"
-                label="Email Address"
+                label="Alamat Email"
                 name="email"
-                placeholder="Input Email"
+                placeholder="Masukkan Alamat Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading} // Kunci input saat loading
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -181,17 +226,18 @@ const Register = () => {
             </Grid>
 
             {/* --- PASSWORD --- */}
-            <Grid size={11.3}>
+            <Grid size={11.8}>
               <TextField
                 required
                 fullWidth
                 name="password"
-                label="Password"
+                label="Kata Sandi"
                 type={showPassword ? "text" : "password"}
                 id="password"
-                placeholder="Input Password"
+                placeholder="Masukkan Kata Sandi"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading} // Kunci input saat loading
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -205,6 +251,7 @@ const Register = () => {
                         onClick={handleClickShowPassword}
                         onMouseDown={handleMouseDownPassword}
                         edge="end"
+                        disabled={loading}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -215,17 +262,18 @@ const Register = () => {
             </Grid>
 
             {/* --- CONFIRM PASSWORD --- */}
-            <Grid size={11.3}>
+            <Grid size={11.8}>
               <TextField
                 required
                 fullWidth
                 name="confirm_password"
-                label="Confirm Password"
+                label="Konfirmasi Kata Sandi"
                 type={showPassword ? "text" : "password"}
                 id="confirm_password"
-                placeholder="Input Confirm Password"
+                placeholder="Ulangi Kata Sandi"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading} // Kunci input saat loading
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -239,6 +287,7 @@ const Register = () => {
                         onClick={handleClickShowPassword}
                         onMouseDown={handleMouseDownPassword}
                         edge="end"
+                        disabled={loading}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -253,35 +302,42 @@ const Register = () => {
             fullWidth
             variant="contained"
             size="large"
-            disabled={loading} // Disable tombol saat loading
+            disabled={loading}
+            onClick={handleRegister}
+            startIcon={
+              loading ? <CircularProgress size={20} color="inherit" /> : null
+            } // <-- MENAMBAHKAN SPINNER DI DALAM TOMBOL
             sx={{
-              mt: 3,
-              mb: 2,
+              mt: 4,
+              mb: 3,
               borderRadius: "30px",
               fontWeight: "bold",
               textTransform: "none",
               fontSize: "1rem",
-              backgroundColor: "#1976d2",
+              backgroundColor: "primary.main",
               height: "48px",
+              "&:hover": {
+                backgroundColor: "primary.dark",
+              },
             }}
-            onClick={handleRegister}
           >
-            {loading ? "Registering..." : "Register"}
+            {loading ? "Sedang Mendaftar..." : "Daftar"}
           </Button>
 
           <Grid container justifyContent="center">
             <Grid>
-              <Typography variant="body2">
-                Already have an account?{" "}
+              <Typography variant="body2" color="text.secondary">
+                Sudah punya akun?{" "}
                 <Link
-                  to="/login"
+                  to={loading ? "#" : "/login"} // Mencegah klik link saat loading
                   style={{
                     textDecoration: "none",
-                    color: "#1976d2",
+                    color: loading ? "grey" : "#1976d2",
                     fontWeight: "bold",
+                    pointerEvents: loading ? "none" : "auto", // Nonaktifkan link saat loading
                   }}
                 >
-                  Login
+                  Masuk di sini
                 </Link>
               </Typography>
             </Grid>

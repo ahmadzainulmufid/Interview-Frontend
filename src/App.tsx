@@ -4,9 +4,11 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Interview from "./pages/Interview";
 import Sidebar from "./components/Sidebar";
-import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
+import InterviewCenter from "./pages/InterviewCenter";
 import ProtectedRoute from "./components/ProtectedRoute";
+import InterviewCenterDropdown from "./pages/InterviewCenterDropdown";
+import InterviewResult from "./pages/InterviewResult";
 
 function App() {
   return (
@@ -17,9 +19,11 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Sidebar />}>
           <Route path="/interview" element={<Interview />} />
-          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<h1>Settings Page</h1>} />
+          <Route path="/interview-center" element={<InterviewCenter />} />
+          <Route path="/position" element={<InterviewCenterDropdown />} />
+          <Route path="/result" element={<InterviewResult />} />
         </Route>
       </Route>
     </Routes>

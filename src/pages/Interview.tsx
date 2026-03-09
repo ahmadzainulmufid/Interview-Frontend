@@ -1,33 +1,19 @@
-// pages/Interview.tsx
 import { useState, useRef, useEffect } from "react";
 import {
   Box,
   CssBaseline,
   Typography,
   Button,
-  Grid as Grid,
   Paper,
   Avatar,
-  IconButton,
-  Card,
-  CardContent,
-  Stack,
   Chip,
-  Alert,
-  Fade,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  CircularProgress,
+  IconButton,
+  Divider,
 } from "@mui/material";
+import { useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
 
-// --- IMPORT TENSORFLOW & MODEL ---
-import "@tensorflow/tfjs";
-import * as faceLandmarksDetection from "@tensorflow-models/face-landmarks-detection";
-import type { FaceLandmarksDetector } from "@tensorflow-models/face-landmarks-detection";
-
-// Import Icons
+// Icons
 import VideocamIcon from "@mui/icons-material/Videocam";
 import VideocamOffIcon from "@mui/icons-material/VideocamOff";
 import MicIcon from "@mui/icons-material/Mic";
@@ -35,392 +21,460 @@ import MicOffIcon from "@mui/icons-material/MicOff";
 import CallEndIcon from "@mui/icons-material/CallEnd";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
-import WarningIcon from "@mui/icons-material/Warning";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import WifiIcon from "@mui/icons-material/Wifi";
-import LightbulbIcon from "@mui/icons-material/Lightbulb";
-import SecurityIcon from "@mui/icons-material/Security";
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+import TimerIcon from "@mui/icons-material/Timer";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+
+const API_BASE = "http://localhost:5001";
+
+interface ChatMessage {
+  // Tambahkan "System" di sini untuk menampung Technical Gap
+  sender: "AI" | "User" | "System";
+  text: string;
+}
+
+// ==========================================
+// KOMPONEN TYPEWRITER UNTUK AI
+// ==========================================
+const TypewriterText = ({
+  text,
+  speed = 30,
+}: {
+  text: string;
+  speed?: number;
+}) => {
+  const [displayedText, setDisplayedText] = useState("");
+
+  useEffect(() => {
+    let i = 0;
+    setDisplayedText("");
+    const intervalId = setInterval(() => {
+      setDisplayedText(text.slice(0, i + 1));
+      i++;
+      if (i >= text.length) clearInterval(intervalId);
+    }, speed);
+
+    return () => clearInterval(intervalId);
+  }, [text, speed]);
+
+  return <Typography variant="body2">{displayedText}</Typography>;
+};
 
 const Interview = () => {
-  // --- STATE BARU: SESSION STARTED ---
-  const [isSessionStarted, setIsSessionStarted] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // --- STATE LAMA ---
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const { roleName, levelName } = location.state || {
+    roleName: "Backend Engineer",
+    levelName: "Junior",
+  };
+
+  const [username, setUsername] = useState("");
+  const [sessionId, setSessionId] = useState<number | null>(null);
+
+  const [aiState, setAiState] = useState<
+    "idle" | "thinking" | "speaking" | "listening"
+  >("idle");
+  const [transcript, setTranscript] = useState<ChatMessage[]>([]);
+
+  const [liveUserText, setLiveUserText] = useState("");
+  const finalTranscriptRef = useRef("");
+
   const [isCameraOn, setIsCameraOn] = useState(false);
-  const [isMicOn, setIsMicOn] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(600);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
-  // AI State
-  const [model, setModel] = useState<FaceLandmarksDetector | null>(null);
-  const [isDistracted, setIsDistracted] = useState(false);
-  const [isModelLoading, setIsModelLoading] = useState(true);
-  const requestRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const hasStarted = useRef(false);
 
-  // 1. LOAD MODEL AI (Tetap jalan di awal agar ready saat user klik start)
+  const recognitionRef = useRef<any>(null);
+
   useEffect(() => {
-    const loadModel = async () => {
-      try {
-        const loadedModel = await faceLandmarksDetection.createDetector(
-          faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-          {
-            runtime: "tfjs",
-            refineLandmarks: true,
-          }
-        );
-        setModel(loadedModel);
-        setIsModelLoading(false);
-        console.log("AI Model Loaded");
-      } catch (err) {
-        console.error("Gagal load model AI:", err);
-      }
-    };
-    loadModel();
-  }, []);
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setUsername(JSON.parse(storedUser).username);
+    }
 
-  // 2. DETEKSI GERAKAN WAJAH
-  useEffect(() => {
-    const detectFocus = async () => {
-      if (
-        videoRef.current &&
-        videoRef.current.readyState === 4 &&
-        model &&
-        isCameraOn
-      ) {
-        const video = videoRef.current;
-        try {
-          const predictions = await model.estimateFaces(video);
-          if (predictions.length > 0) {
-            const keypoints = predictions[0].keypoints;
-            const nose = keypoints[1];
-            const leftEye = keypoints[33];
-            const rightEye = keypoints[263];
-            const faceWidth = rightEye.x - leftEye.x;
-            const noseRelativePos = (nose.x - leftEye.x) / faceWidth;
+    // SETUP WEB SPEECH API
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = "id-ID";
 
-            const isLookingLeft = noseRelativePos < 0.25;
-            const isLookingRight = noseRelativePos > 0.75;
-
-            if (isLookingLeft || isLookingRight) {
-              setIsDistracted(true);
-            } else {
-              setIsDistracted(false);
-            }
+      recognitionRef.current.onresult = (event: any) => {
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscriptRef.current += event.results[i][0].transcript + " ";
           } else {
-            setIsDistracted(true);
+            interimTranscript += event.results[i][0].transcript;
           }
-        } catch (error) {
-          console.error("Detection error:", error);
         }
-      }
-      if (isCameraOn) {
-        requestRef.current = requestAnimationFrame(detectFocus);
-      }
-    };
+        setLiveUserText(finalTranscriptRef.current + interimTranscript);
+      };
+    }
 
-    if (isCameraOn && model) {
-      detectFocus();
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsDistracted(false);
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      mulaiSesiAPI();
+      startCamera();
     }
 
     return () => {
-      if (requestRef.current) {
-        cancelAnimationFrame(requestRef.current);
-      }
+      if (currentAudioRef.current) currentAudioRef.current.pause();
+      stopCamera();
     };
-  }, [isCameraOn, model]);
+  }, []);
 
-  // --- FUNGSI KAMERA ---
+  useEffect(() => {
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+    }
+  }, [transcript, liveUserText]);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+    const timerId = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    return () => clearInterval(timerId);
+  }, [timeLeft]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  const mulaiSesiAPI = async () => {
+    setAiState("thinking");
+    try {
+      const response = await axios.post(`${API_BASE}/start`, {
+        role: roleName,
+        level: levelName,
+      });
+
+      if (response.data.success) {
+        const data = response.data.data;
+        setSessionId(data.session_id);
+        setTranscript([{ sender: "AI", text: data.question }]);
+        playAiAudio(data.audio_url);
+      }
+    } catch (error) {
+      console.error("Gagal memulai sesi", error);
+      setAiState("idle");
+    }
+  };
+
+  const playAiAudio = (audioPath: string) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+    }
+    setAiState("speaking");
+    const audio = new Audio(`${API_BASE}${audioPath}`);
+    currentAudioRef.current = audio;
+
+    audio.onended = () => {
+      setAiState("listening");
+    };
+    audio.play().catch(() => setAiState("listening"));
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecordingAnswer();
+    } else {
+      startRecordingAnswer();
+    }
+  };
+
+  const startRecordingAnswer = () => {
+    if (!streamRef.current) return;
+    const audioStream = new MediaStream(streamRef.current.getAudioTracks());
+
+    try {
+      const mediaRecorder = new MediaRecorder(audioStream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = sendAudioToAPI;
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      setLiveUserText("");
+      finalTranscriptRef.current = "";
+      if (recognitionRef.current) recognitionRef.current.start();
+    } catch (e) {
+      console.error("MediaRecorder Error:", e);
+    }
+  };
+
+  const stopRecordingAnswer = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setAiState("thinking");
+
+      if (recognitionRef.current) recognitionRef.current.stop();
+    }
+  };
+
+  const sendAudioToAPI = async () => {
+    if (!sessionId) return;
+
+    const mimeType = mediaRecorderRef.current?.mimeType || "audio/webm";
+    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+    if (audioBlob.size < 1000) {
+      setAiState("listening");
+      setLiveUserText("");
+      finalTranscriptRef.current = "";
+      alert("Suara tidak terdengar atau terlalu singkat. Silakan coba lagi.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("session_id", sessionId.toString());
+    formData.append("audio", audioBlob, "answer.webm");
+
+    try {
+      const response = await axios.post(`${API_BASE}/answer/audio`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (response.data.success) {
+        let finalTranscript = response.data.transcript.trim();
+
+        const hallucinationWords = [
+          "terima kasih.",
+          "terima kasih",
+          "terimakasih.",
+          "subtitles by",
+        ];
+        if (
+          hallucinationWords.some((word) =>
+            finalTranscript.toLowerCase().includes(word),
+          )
+        ) {
+          finalTranscript = liveUserText || "Jawaban kurang jelas.";
+        }
+
+        const responseData = response.data.data;
+
+        // 1. TAMBAHKAN JAWABAN USER KE TRANSKRIP SAJA (Tanpa pesan System/Evaluasi)
+        setTranscript((prev) => [
+          ...prev,
+          { sender: "User", text: finalTranscript },
+        ]);
+        setLiveUserText("");
+        finalTranscriptRef.current = "";
+
+        // 2. CEK JIKA WAWANCARA SELESAI
+        if (responseData.stage === "Completed") {
+          setTranscript((prev) => [
+            ...prev,
+            {
+              sender: "AI",
+              text: "Terima kasih, wawancara telah selesai. Kami akan memproses laporan Anda.",
+            },
+          ]);
+          setAiState("idle");
+
+          // Pindah ke halaman Result hanya dengan membawa Session ID
+          setTimeout(() => {
+            navigate("/result", { state: { sessionId: sessionId } });
+          }, 2000);
+          return;
+        }
+
+        // Lanjut ke pertanyaan berikutnya
+        setTranscript((prev) => [
+          ...prev,
+          { sender: "AI", text: responseData.next_question },
+        ]);
+        playAiAudio(responseData.audio_url);
+      }
+    } catch (error) {
+      setAiState("listening");
+      setLiveUserText("");
+      finalTranscriptRef.current = "";
+    }
+  };
+
   const startCamera = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
-      setStream(mediaStream);
+      streamRef.current = stream;
       setIsCameraOn(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-    } catch (err) {
-      console.error("Gagal akses kamera:", err);
-      alert("Izin kamera ditolak.");
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (error) {
+      alert("Izin kamera/mikrofon ditolak");
     }
   };
 
   const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
-      setIsCameraOn(false);
-      setIsDistracted(false);
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setIsCameraOn(false);
+  };
+
+  const renderAiStatus = () => {
+    switch (aiState) {
+      case "thinking":
+        return (
+          <>
+            <MoreHorizIcon fontSize="small" /> Thinking...
+          </>
+        );
+      case "speaking":
+        return (
+          <>
+            <VolumeUpIcon fontSize="small" /> Speaking...
+          </>
+        );
+      case "listening":
+        return (
+          <>
+            <RecordVoiceOverIcon fontSize="small" /> Listening...
+          </>
+        );
+      default:
+        return "Idle";
     }
   };
 
-  const toggleMic = () => {
-    if (stream) {
-      stream.getAudioTracks()[0].enabled = !isMicOn;
-      setIsMicOn(!isMicOn);
-    }
-  };
-
-  // --- FUNGSI BARU: MULAI SESI ---
-  const handleStartSession = () => {
-    setIsSessionStarted(true);
-    // Opsional: Langsung nyalakan kamera saat masuk room
-    startCamera();
-  };
-
-  // =================================================================
-  // TAMPILAN 1: LOBBY / PRE-INTERVIEW (Jika sesi belum mulai)
-  // =================================================================
-  if (!isSessionStarted) {
-    return (
-      <Box
-        sx={{
-          minHeight: "100vh",
-          width: "100vw",
-          background: "linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          p: 3,
-        }}
-      >
-        <CssBaseline />
-        <Paper
-          elevation={10}
-          sx={{
-            maxWidth: 800,
-            width: "100%",
-            borderRadius: 4,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: { xs: "column", md: "row" },
-          }}
-        >
-          {/* Bagian Kiri: Info & Rules */}
-          <Box sx={{ p: 4, flex: 1.5 }}>
-            <Typography variant="overline" color="primary" fontWeight="bold">
-              AI Interview Session
-            </Typography>
-            <Typography variant="h4" fontWeight="bold" sx={{ mb: 2 }}>
-              Ready for your Frontend Developer Interview?
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-              Before we begin, please review the following instructions to
-              ensure the best experience with our AI interviewer.
-            </Typography>
-
-            <List>
-              {[
-                {
-                  text: "Ensure you are in a quiet, well-lit environment.",
-                  icon: <LightbulbIcon color="warning" />,
-                },
-                {
-                  text: "Stable internet connection is required.",
-                  icon: <WifiIcon color="primary" />,
-                },
-                {
-                  text: "Your camera and microphone will be monitored.",
-                  icon: <VideocamIcon color="action" />,
-                },
-                {
-                  text: "AI will analyze your focus and expressions.",
-                  icon: <SecurityIcon color="success" />,
-                },
-              ].map((item, index) => (
-                <ListItem key={index} disableGutters>
-                  <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-
-          {/* Bagian Kanan: Action & AI Status */}
-          <Box
-            sx={{
-              bgcolor: "#f5f7fa",
-              p: 4,
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              borderLeft: { md: "1px solid #e0e0e0" },
-            }}
-          >
-            <Avatar
-              sx={{
-                width: 80,
-                height: 80,
-                bgcolor: "white",
-                color: "primary.main",
-                mb: 2,
-                boxShadow: 2,
-              }}
-            >
-              <SmartToyIcon fontSize="large" />
-            </Avatar>
-            <Typography variant="h6" fontWeight="bold" gutterBottom>
-              System Check
-            </Typography>
-
-            {/* Indikator Loading AI */}
-            {isModelLoading ? (
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{ mb: 4 }}
-              >
-                <CircularProgress size={16} />
-                <Typography variant="caption">Loading AI Model...</Typography>
-              </Stack>
-            ) : (
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={1}
-                sx={{ mb: 4 }}
-              >
-                <CheckCircleOutlineIcon color="success" fontSize="small" />
-                <Typography
-                  variant="caption"
-                  color="success.main"
-                  fontWeight="bold"
-                >
-                  AI Model Ready
-                </Typography>
-              </Stack>
-            )}
-
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              disabled={isModelLoading}
-              onClick={handleStartSession}
-              sx={{
-                borderRadius: "30px",
-                py: 1.5,
-                fontWeight: "bold",
-                fontSize: "1rem",
-                textTransform: "none",
-                boxShadow: "0 8px 16px rgba(25, 118, 210, 0.2)",
-              }}
-            >
-              {isModelLoading ? "Please Wait..." : "I'm Ready, Start Now"}
-            </Button>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 2, textAlign: "center" }}
-            >
-              By clicking Start, you agree to be recorded for analysis purposes.
-            </Typography>
-          </Box>
-        </Paper>
-      </Box>
-    );
-  }
-
-  // =================================================================
-  // TAMPILAN 2: ACTIVE SESSION (Kamera & AI)
-  // =================================================================
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        height: "100vh",
         width: "100vw",
         background: "linear-gradient(135deg, #e3f2fd 0%, #f5f5f5 100%)",
-        p: 4,
+        p: { xs: 2, md: 3 },
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
+        overflow: "hidden",
       }}
     >
       <CssBaseline />
 
-      <Box sx={{ mb: 4, textAlign: "center", width: "100%" }}>
-        <Typography variant="h4" fontWeight="bold" color="primary">
-          AI Interview Session
+      {/* HEADER */}
+      <Box
+        sx={{
+          mb: 2,
+          width: "100%",
+          maxWidth: "1100px",
+          display: "flex",
+          alignItems: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Box sx={{ flex: 1 }} />
+        <Typography
+          variant="h4"
+          fontWeight="bold"
+          color="primary"
+          sx={{ flex: 1, textAlign: "center" }}
+        >
+          Sesi Wawancara
         </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Posisi: Frontend Developer
-        </Typography>
+        <Box sx={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+          <Paper
+            elevation={2}
+            sx={{
+              px: 2.5,
+              py: 1,
+              borderRadius: "30px",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              bgcolor: timeLeft <= 60 ? "#ffebee" : "#ffffff",
+              border: "2px solid",
+              borderColor: timeLeft <= 60 ? "error.main" : "#e0e0e0",
+              color: timeLeft <= 60 ? "error.main" : "text.primary",
+            }}
+          >
+            <TimerIcon color={timeLeft <= 60 ? "error" : "action"} />
+            <Typography
+              variant="h6"
+              fontWeight="bold"
+              sx={{ fontFamily: "monospace" }}
+            >
+              {formatTime(timeLeft)}
+            </Typography>
+          </Paper>
+        </Box>
       </Box>
 
-      {/* --- ALERT DISTRAKSI --- */}
-      <Fade in={isDistracted && isCameraOn}>
-        <Alert
-          severity="error"
-          variant="filled"
-          icon={<WarningIcon fontSize="inherit" />}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+          width: "100%",
+          maxWidth: "1100px",
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        {/* TOP ROW: KAMERA & AI */}
+        <Box
           sx={{
-            position: "fixed",
-            top: 20,
-            zIndex: 9999,
-            width: "auto",
-            fontWeight: "bold",
-            boxShadow: 3,
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            gap: 2,
+            width: "100%",
+            flex: 1,
+            minHeight: 0,
           }}
         >
-          PERINGATAN: Mohon tetap fokus melihat ke kamera!
-        </Alert>
-      </Fade>
-
-      <Grid
-        container
-        spacing={4}
-        maxWidth="lg"
-        sx={{ height: "100%", width: "100%" }}
-      >
-        {/* === KIRI: USER CAMERA === */}
-        <Grid size={{ xs: 12, md: 7 }}>
           <Paper
             elevation={6}
             sx={{
-              p: 2,
-              height: "450px",
+              p: 1,
+              flex: 1.4,
+              height: "100%",
               borderRadius: "20px",
               display: "flex",
               flexDirection: "column",
               bgcolor: "black",
               position: "relative",
               overflow: "hidden",
-              border: isDistracted && isCameraOn ? "4px solid #f44336" : "none",
-              transition: "border 0.3s ease",
             }}
           >
             <Chip
-              label={
-                isDistracted && isCameraOn ? "DISTRACTED!" : "You (Candidate)"
-              }
-              color={isDistracted && isCameraOn ? "error" : "primary"}
+              label={`${username} (Interviewee)`}
+              color="primary"
               size="small"
               sx={{ position: "absolute", top: 16, left: 16, zIndex: 10 }}
             />
-
             <Box
               sx={{
                 flex: 1,
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                width: "100%",
-                height: "100%",
                 borderRadius: "12px",
                 overflow: "hidden",
                 bgcolor: "#2c2c2c",
+                position: "relative",
               }}
             >
               <video
@@ -436,189 +490,262 @@ const Interview = () => {
                   transform: "scaleX(-1)",
                 }}
               />
-
               {!isCameraOn && (
                 <Box sx={{ textAlign: "center", color: "white" }}>
                   <Avatar
                     sx={{
-                      width: 80,
-                      height: 80,
-                      mb: 2,
+                      width: 70,
+                      height: 70,
+                      mb: 1.5,
                       mx: "auto",
                       bgcolor: "grey.700",
                     }}
                   >
                     <VideocamOffIcon fontSize="large" />
                   </Avatar>
-                  <Typography variant="h6">Camera is Off</Typography>
+                  <Typography variant="subtitle1">Kamera Dimatikan</Typography>
                   <Button
                     variant="contained"
-                    sx={{ mt: 2, borderRadius: 20 }}
+                    size="small"
+                    sx={{ mt: 1.5 }}
                     onClick={startCamera}
                   >
-                    Turn On Camera
+                    Nyalakan Kamera
                   </Button>
                 </Box>
               )}
             </Box>
-
-            <Stack
-              direction="row"
-              spacing={2}
-              justifyContent="center"
-              sx={{
-                position: "absolute",
-                bottom: 24,
-                left: "50%",
-                transform: "translateX(-50%)",
-                bgcolor: "rgba(255,255,255,0.2)",
-                backdropFilter: "blur(10px)",
-                p: 1,
-                borderRadius: "30px",
-              }}
-            >
-              <IconButton
-                onClick={toggleMic}
-                sx={{
-                  bgcolor: isMicOn ? "white" : "error.main",
-                  color: isMicOn ? "black" : "white",
-                  "&:hover": { bgcolor: "grey.200" },
-                }}
-              >
-                {isMicOn ? <MicIcon /> : <MicOffIcon />}
-              </IconButton>
-
-              <IconButton
-                onClick={isCameraOn ? stopCamera : startCamera}
-                sx={{
-                  bgcolor: isCameraOn ? "white" : "error.main",
-                  color: isCameraOn ? "black" : "white",
-                  "&:hover": { bgcolor: "grey.200" },
-                }}
-              >
-                {isCameraOn ? <VideocamIcon /> : <VideocamOffIcon />}
-              </IconButton>
-
-              <IconButton
-                // Opsi tambahan: Tombol end call bisa diarahkan untuk keluar sesi
-                onClick={() => {
-                  stopCamera();
-                  setIsSessionStarted(false);
-                }}
-                sx={{
-                  bgcolor: "error.main",
-                  color: "white",
-                  "&:hover": { bgcolor: "error.dark" },
-                }}
-              >
-                <CallEndIcon />
-              </IconButton>
-            </Stack>
           </Paper>
-        </Grid>
 
-        {/* === KANAN: AI INTERVIEWER === */}
-        <Grid size={{ xs: 12, md: 5 }}>
           <Paper
             elevation={6}
             sx={{
-              height: "450px",
-              p: 3,
+              flex: 1,
+              height: "100%",
+              p: 2,
               borderRadius: "20px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "center",
               bgcolor: "#ffffff",
+              position: "relative",
             }}
           >
             <Chip
               label="AI Interviewer"
               color="secondary"
               size="small"
-              sx={{ alignSelf: "flex-start" }}
+              sx={{ position: "absolute", top: 16, left: 16 }}
             />
-
-            <Box sx={{ textAlign: "center", mt: 4 }}>
-              <Box
+            <Box sx={{ textAlign: "center" }}>
+              <Avatar
                 sx={{
-                  position: "relative",
-                  display: "inline-block",
-                  "&::before": {
-                    content: '""',
-                    position: "absolute",
-                    top: -10,
-                    left: -10,
-                    right: -10,
-                    bottom: -10,
-                    borderRadius: "50%",
-                    border: "2px solid #9c27b0",
-                    animation: "pulse 2s infinite",
-                  },
+                  width: 100,
+                  height: 100,
+                  bgcolor:
+                    aiState === "listening" ? "success.main" : "secondary.main",
+                  mx: "auto",
+                  transition: "0.3s",
                 }}
               >
-                <Avatar
-                  sx={{
-                    width: 120,
-                    height: 120,
-                    bgcolor: "secondary.main",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-                  }}
-                >
-                  <SmartToyIcon sx={{ fontSize: 60 }} />
-                </Avatar>
-              </Box>
-              <Typography variant="h6" sx={{ mt: 3, fontWeight: "bold" }}>
+                <SmartToyIcon sx={{ fontSize: 50 }} />
+              </Avatar>
+              <Typography variant="h6" sx={{ mt: 2, fontWeight: "bold" }}>
                 Sarah (AI)
               </Typography>
               <Typography
                 variant="body2"
-                color="text.secondary"
+                color={
+                  aiState === "listening" ? "success.main" : "secondary.main"
+                }
                 sx={{
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 1,
+                  mt: 1,
                 }}
               >
-                <RecordVoiceOverIcon fontSize="small" /> Listening...
+                {renderAiStatus()}
               </Typography>
             </Box>
+          </Paper>
+        </Box>
 
-            <Card
-              sx={{
-                width: "100%",
-                bgcolor: "#f0f7ff",
-                borderRadius: 3,
-                border: "1px solid #bbdefb",
-                mt: 2,
-              }}
-            >
-              <CardContent>
+        {/* BOTTOM ROW: TRANSCRIPT DINAMIS */}
+        <Paper
+          elevation={4}
+          sx={{
+            width: "100%",
+            height: "220px",
+            flexShrink: 0,
+            p: 2,
+            borderRadius: "20px",
+            bgcolor: "#ffffff",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Box ref={transcriptRef} sx={{ flex: 1, overflowY: "auto", pr: 1 }}>
+            {transcript.map((chat, index) => (
+              <Box
+                key={index}
+                sx={{
+                  mb: 1.5,
+                  display: "flex",
+                  flexDirection: chat.sender === "User" ? "row-reverse" : "row",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                }}
+              >
                 <Typography
                   variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  mb={1}
+                  fontWeight="bold"
+                  color={
+                    chat.sender === "AI" ? "secondary.main" : "primary.main"
+                  }
+                  sx={{ mt: 1, whiteSpace: "nowrap" }}
                 >
-                  Current Question:
+                  {chat.sender === "AI" ? "Sarah (AI)" : username}
                 </Typography>
-                <Typography variant="body1" fontWeight="medium">
-                  "Tell me about a time you faced a challenging technical
-                  problem and how you solved it?"
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: "12px",
+                    bgcolor: chat.sender === "AI" ? "#f3e5f5" : "#e3f2fd",
+                    color: "text.primary",
+                    maxWidth: "75%",
+                    textAlign: "left",
+                  }}
+                >
+                  {chat.sender === "AI" && index === transcript.length - 1 ? (
+                    <TypewriterText text={chat.text} speed={40} />
+                  ) : (
+                    <Typography variant="body2">{chat.text}</Typography>
+                  )}
+                </Box>
+              </Box>
+            ))}
+
+            {isRecording && liveUserText && (
+              <Box
+                sx={{
+                  mb: 1.5,
+                  display: "flex",
+                  flexDirection: "row-reverse",
+                  alignItems: "flex-start",
+                  gap: 1.5,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  fontWeight="bold"
+                  color="primary.main"
+                  sx={{ mt: 1, whiteSpace: "nowrap" }}
+                >
+                  {username}
                 </Typography>
-              </CardContent>
-            </Card>
-          </Paper>
-        </Grid>
-      </Grid>
-      <style>{`
-        @keyframes pulse {
-          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(156, 39, 176, 0.7); }
-          70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(156, 39, 176, 0); }
-          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(156, 39, 176, 0); }
-        }
-      `}</style>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: "12px",
+                    bgcolor: "#e3f2fd",
+                    color: "text.secondary",
+                    fontStyle: "italic",
+                    maxWidth: "75%",
+                    textAlign: "left",
+                  }}
+                >
+                  <Typography variant="body2">{liveUserText}...</Typography>
+                </Box>
+              </Box>
+            )}
+
+            {aiState === "thinking" && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontStyle: "italic", ml: 8 }}
+              >
+                AI sedang mencerna jawaban...
+              </Typography>
+            )}
+          </Box>
+        </Paper>
+      </Box>
+
+      {/* CONTROL BAR */}
+      <Paper
+        elevation={6}
+        sx={{
+          mt: 2,
+          p: 1,
+          px: 3,
+          borderRadius: "40px",
+          display: "flex",
+          gap: 2,
+          alignItems: "center",
+          bgcolor: "white",
+          flexShrink: 0,
+        }}
+      >
+        <IconButton
+          onClick={toggleRecording}
+          disabled={aiState !== "listening" || !isCameraOn}
+          sx={{
+            bgcolor: isRecording
+              ? "error.main"
+              : aiState === "listening"
+                ? "success.light"
+                : "grey.200",
+            color:
+              isRecording || aiState === "listening" ? "white" : "grey.500",
+            "&:hover": { bgcolor: isRecording ? "error.dark" : "success.main" },
+            transition: "0.2s",
+          }}
+          title="Klik untuk merekam"
+        >
+          {isRecording ? <MicIcon /> : <MicOffIcon />}
+        </IconButton>
+
+        {aiState === "listening" && !isRecording && (
+          <Typography variant="caption" color="success.main" fontWeight="bold">
+            Klik ikon Mic untuk menjawab
+          </Typography>
+        )}
+        {isRecording && (
+          <Typography variant="caption" color="error.main" fontWeight="bold">
+            Merekam... Klik kembali untuk mengirim
+          </Typography>
+        )}
+
+        <IconButton
+          onClick={isCameraOn ? stopCamera : startCamera}
+          sx={{
+            bgcolor: isCameraOn ? "grey.200" : "error.main",
+            color: isCameraOn ? "black" : "white",
+            "&:hover": { bgcolor: isCameraOn ? "grey.300" : "error.dark" },
+          }}
+        >
+          {isCameraOn ? <VideocamIcon /> : <VideocamOffIcon />}
+        </IconButton>
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+        <Button
+          variant="contained"
+          color="error"
+          startIcon={<CallEndIcon />}
+          sx={{ borderRadius: "20px", px: 3, py: 1, fontWeight: "bold" }}
+          onClick={() => {
+            stopCamera();
+            navigate("/result", {
+              state: { sessionId: sessionId, transcriptHistory: transcript },
+            });
+          }}
+        >
+          AKHIRI WAWANCARA
+        </Button>
+      </Paper>
     </Box>
   );
 };

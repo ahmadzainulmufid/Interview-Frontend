@@ -1,8 +1,8 @@
 // pages/Dashboard.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
-  Grid as Grid,
+  Grid,
   Paper,
   Typography,
   Button,
@@ -22,25 +22,34 @@ import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CodeIcon from "@mui/icons-material/Code";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-
-// Icons untuk Stats Baru
-import SchoolIcon from "@mui/icons-material/School"; // Readiness
-import QuestionAnswerIcon from "@mui/icons-material/QuestionAnswer"; // Questions
-import WorkHistoryIcon from "@mui/icons-material/WorkHistory"; // Sessions
+import SchoolIcon from "@mui/icons-material/School";
+import QuestionAnswerIcon from "@mui/icons-material/QuestionAnswer";
+import WorkHistoryIcon from "@mui/icons-material/WorkHistory";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+
   // --- STATE ---
-  const [cvFile, setCvFile] = useState<File | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // Kita cek localStorage saat awal load agar data tidak hilang saat refresh
+  const [candidateId, setCandidateId] = useState<number | null>(() => {
+    const saved = localStorage.getItem("candidateId");
+    return saved ? parseInt(saved) : null;
+  });
 
   const [analysisData, setAnalysisData] = useState<{
     role: string;
     matchScore: number;
     hardSkills: string[];
     softSkills: string[];
-  } | null>(null);
+  } | null>(() => {
+    const saved = localStorage.getItem("analysisData");
+    return saved ? JSON.parse(saved) : null;
+  });
 
-  // --- DATA BARU: LEBIH RELEVAN UNTUK JOB SEEKER ---
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // --- DATA STATS (Static) ---
   const stats = [
     {
       label: "Total Simulations",
@@ -89,40 +98,106 @@ const Dashboard = () => {
     },
   ];
 
-  // Mengubah "Strength Map" menjadi "Improvement Focus" (Lebih berguna)
-  const improvementAreas: Array<{
-    area: string;
-    score: number;
-    color: "warning" | "success" | "primary";
-  }> = [
-    { area: "Speaking Confidence", score: 60, color: "warning" }, // Butuh perbaikan
-    { area: "Technical Depth", score: 85, color: "success" }, // Sudah bagus
-    { area: "Body Language", score: 70, color: "primary" }, // Lumayan
-    { area: "Answer Structure", score: 55, color: "warning" }, // Butuh perbaikan
+  const improvementAreas = [
+    { area: "Speaking Confidence", score: 60, color: "warning" },
+    { area: "Technical Depth", score: 85, color: "success" },
+    { area: "Body Language", score: 70, color: "primary" },
+    { area: "Answer Structure", score: 55, color: "warning" },
   ];
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setCvFile(file);
-      setIsAnalyzing(true);
-      setAnalysisData(null);
+    if (!file) return;
 
-      setTimeout(() => {
-        setIsAnalyzing(false);
-        setAnalysisData({
-          role: "Senior Frontend Engineer",
-          matchScore: 94,
-          hardSkills: ["React Advanced", "Performance"],
-          softSkills: ["Leadership", "Mentoring"],
-        });
-      }, 2500);
+    setIsAnalyzing(true);
+
+    // Reset data lama
+    setAnalysisData(null);
+    setCandidateId(null);
+    localStorage.removeItem("candidateId");
+    localStorage.removeItem("analysisData");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    formData.append("name", user.username || "Guest Candidate");
+
+    try {
+      const response = await fetch("http://127.0.0.1:5000/upload-cv", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const newAnalysis = {
+          role: data.analysis.role,
+          matchScore: data.analysis.matchScore,
+          hardSkills: data.analysis.hardSkills,
+          softSkills: data.analysis.softSkills,
+        };
+
+        // Simpan ke State & LocalStorage
+        setCandidateId(data.candidate_id);
+        setAnalysisData(newAnalysis);
+        localStorage.setItem("candidateId", data.candidate_id.toString());
+        localStorage.setItem("analysisData", JSON.stringify(newAnalysis));
+      } else {
+        alert(`Upload Gagal: ${data.msg}`);
+      }
+    } catch (error) {
+      console.error("Error uploading:", error);
+      alert("Gagal terhubung ke server.");
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
+  const handleReset = async () => {
+    if (!candidateId) {
+      setAnalysisData(null);
+      return;
+    }
+
+    try {
+      await fetch(`http://127.0.0.1:5000/delete-cv/${candidateId}`, {
+        method: "DELETE",
+      });
+      console.log(`Candidate ${candidateId} deleted.`);
+    } catch (error) {
+      console.error("Gagal menghapus data:", error);
+    } finally {
+      // Hapus data dari UI & Storage
+      setAnalysisData(null);
+      setCandidateId(null);
+      localStorage.removeItem("candidateId");
+      localStorage.removeItem("analysisData");
+    }
+  };
+
+  const handleStartSession = () => {
+    if (candidateId) {
+      navigate("/interview", { state: { candidateId: candidateId } });
+    } else {
+      alert("Harap upload CV terlebih dahulu.");
+    }
+  };
+
+  // Log untuk debugging state
+  useEffect(() => {
+    console.log(
+      "Dashboard State -> ID:",
+      candidateId,
+      "Analysis:",
+      analysisData
+    );
+  }, [candidateId, analysisData]);
+
   return (
     <Box>
-      {/* 1. HEADER */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           Hello, Candidate! 👋
@@ -133,8 +208,9 @@ const Dashboard = () => {
       </Box>
 
       <Grid container spacing={3}>
-        {/* 2. STATISTIC CARDS (RELEVANSI DIPERBAIKI) */}
+        {/* 1. STATS CARDS */}
         {stats.map((stat, index) => (
+          // PERBAIKAN GRID: Gunakan prop 'size'
           <Grid size={{ xs: 12, sm: 4 }} key={index}>
             <Paper
               elevation={2}
@@ -176,14 +252,14 @@ const Dashboard = () => {
           </Grid>
         ))}
 
-        {/* 3. HERO CARD (UPLOAD) */}
+        {/* 2. HERO CARD (UPLOAD / ANALYSIS) */}
         <Grid size={{ xs: 12, md: 8 }}>
           <Paper
             elevation={4}
             sx={{
               p: 4,
               borderRadius: 4,
-              background: "linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)", // Warna biru lebih profesional
+              background: "linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)",
               color: "white",
               display: "flex",
               flexDirection: "column",
@@ -203,14 +279,15 @@ const Dashboard = () => {
                 mx: "auto",
               }}
             >
-              {!cvFile && (
+              {/* TAMPILAN UPLOAD (Jika belum ada data analisis) */}
+              {!analysisData && !isAnalyzing && (
                 <>
                   <Typography variant="h4" fontWeight="bold" gutterBottom>
                     Generate Your Custom Interview
                   </Typography>
                   <Typography variant="body1" sx={{ mb: 4, opacity: 0.9 }}>
                     Upload your CV (PDF). Our AI creates realistic questions
-                    based on your actual experience and target role.
+                    based on your actual experience.
                   </Typography>
                   <Button
                     component="label"
@@ -238,6 +315,7 @@ const Dashboard = () => {
                 </>
               )}
 
+              {/* TAMPILAN LOADING */}
               {isAnalyzing && (
                 <Box
                   sx={{
@@ -253,6 +331,7 @@ const Dashboard = () => {
                 </Box>
               )}
 
+              {/* TAMPILAN HASIL ANALISIS */}
               {analysisData && !isAnalyzing && (
                 <Stack spacing={2} alignItems="center">
                   <Chip
@@ -344,10 +423,7 @@ const Dashboard = () => {
                     <Button
                       variant="text"
                       sx={{ color: "white", mr: 2 }}
-                      onClick={() => {
-                        setCvFile(null);
-                        setAnalysisData(null);
-                      }}
+                      onClick={handleReset}
                     >
                       Reset
                     </Button>
@@ -355,7 +431,7 @@ const Dashboard = () => {
                       variant="contained"
                       size="large"
                       startIcon={<PlayCircleOutlineIcon />}
-                      href="/interview"
+                      onClick={handleStartSession}
                       sx={{
                         bgcolor: "white",
                         color: "#1565c0",
@@ -382,7 +458,7 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* 4. PERFORMANCE GAPS (PENGGANTI STRENGTH MAP) */}
+        {/* 3. AREAS TO IMPROVE */}
         <Grid size={{ xs: 12, md: 4 }}>
           <Paper elevation={2} sx={{ p: 3, borderRadius: 3, height: "100%" }}>
             <Typography variant="h6" fontWeight="bold" gutterBottom>
@@ -396,7 +472,6 @@ const Dashboard = () => {
             >
               Focus on these areas to increase passing rate.
             </Typography>
-
             {improvementAreas.map((item, index) => (
               <Box key={index} sx={{ mb: 2.5 }}>
                 <Box
@@ -417,10 +492,11 @@ const Dashboard = () => {
                     {item.score < 70 ? "Needs Work" : "Good"} ({item.score}%)
                   </Typography>
                 </Box>
+                {/* Pastikan tipe warna valid */}
                 <LinearProgress
                   variant="determinate"
                   value={item.score}
-                  color={item.color}
+                  color={item.color as "primary" | "warning" | "success"}
                   sx={{ height: 8, borderRadius: 5, bgcolor: "#f0f0f0" }}
                 />
               </Box>
@@ -428,8 +504,8 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* 5. RECENT SESSIONS (ALIGNMENT FIXED) */}
-        <Grid size={12}>
+        {/* 4. RECENT SESSIONS */}
+        <Grid size={{ xs: 12 }}>
           <Paper
             elevation={2}
             sx={{ p: 0, borderRadius: 3, overflow: "hidden" }}
@@ -450,8 +526,6 @@ const Dashboard = () => {
               </Button>
             </Box>
             <Divider />
-
-            {/* HEADER ROW UNTUK KEJELASAN */}
             <Grid
               container
               sx={{
@@ -461,7 +535,7 @@ const Dashboard = () => {
                 display: { xs: "none", md: "flex" },
               }}
             >
-              <Grid size={5}>
+              <Grid size={{ xs: 5 }}>
                 <Typography
                   variant="caption"
                   fontWeight="bold"
@@ -470,7 +544,7 @@ const Dashboard = () => {
                   ROLE & DATE
                 </Typography>
               </Grid>
-              <Grid size={4}>
+              <Grid size={{ xs: 4 }}>
                 <Typography
                   variant="caption"
                   fontWeight="bold"
@@ -479,7 +553,7 @@ const Dashboard = () => {
                   FOCUS TOPICS
                 </Typography>
               </Grid>
-              <Grid size={3} sx={{ textAlign: "right" }}>
+              <Grid size={{ xs: 3 }} sx={{ textAlign: "right" }}>
                 <Typography
                   variant="caption"
                   fontWeight="bold"
@@ -489,7 +563,6 @@ const Dashboard = () => {
                 </Typography>
               </Grid>
             </Grid>
-
             {recentInterviews.map((item, index) => (
               <Box
                 key={index}
@@ -503,7 +576,6 @@ const Dashboard = () => {
                 }}
               >
                 <Grid container alignItems="center" spacing={2}>
-                  {/* KOLOM 1: Role Info */}
                   <Grid size={{ xs: 12, md: 5 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                       <Avatar
@@ -524,8 +596,6 @@ const Dashboard = () => {
                       </Box>
                     </Box>
                   </Grid>
-
-                  {/* KOLOM 2: Tags (Align Left) */}
                   <Grid size={{ xs: 12, md: 4 }}>
                     <Stack direction="row" spacing={1}>
                       {item.tags.map((tag) => (
@@ -538,8 +608,6 @@ const Dashboard = () => {
                       ))}
                     </Stack>
                   </Grid>
-
-                  {/* KOLOM 3: Score & Status (Align Right & Center Vertically) */}
                   <Grid size={{ xs: 12, md: 3 }}>
                     <Box
                       sx={{
@@ -570,7 +638,7 @@ const Dashboard = () => {
                         label={item.status}
                         color={item.matchScore > 80 ? "success" : "warning"}
                         size="small"
-                        variant="filled" // Ganti variant biar lebih tegas
+                        variant="filled"
                       />
                     </Box>
                   </Grid>
