@@ -60,7 +60,17 @@ const InterviewResult: React.FC = () => {
       })
       .then((res) => {
         if (res.data.success) {
-          setSessionData(res.data.data);
+          const data = res.data.data;
+
+          if (data.is_completed === false) {
+            alert(
+              "Laporan belum tersedia karena sesi wawancara belum selesai.",
+            );
+
+            navigate("/interview-center");
+            return;
+          }
+          setSessionData(data);
         }
       })
       .catch((err) => console.error("Gagal memuat hasil:", err))

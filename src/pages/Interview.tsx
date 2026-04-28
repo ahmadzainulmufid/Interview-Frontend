@@ -805,6 +805,11 @@ const Interview = () => {
             stopCamera();
             setAiState("thinking");
 
+            if (currentAudioRef.current) {
+              currentAudioRef.current.pause();
+              currentAudioRef.current.currentTime = 0;
+            }
+
             try {
               if (sessionId) {
                 const token = localStorage.getItem("access_token");
