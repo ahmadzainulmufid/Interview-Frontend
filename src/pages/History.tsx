@@ -49,8 +49,14 @@ const History = () => {
   const openMenu = Boolean(anchorEl);
 
   useEffect(() => {
+    const token = localStorage.getItem("access_token");
+
     axios
-      .get(`${API_BASE}/history`)
+      .get(`${API_BASE}/history`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       .then((res) => {
         if (res.data.success) {
           setHistoryList(res.data.data);

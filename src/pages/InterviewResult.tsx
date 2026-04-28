@@ -50,8 +50,14 @@ const InterviewResult: React.FC = () => {
       return;
     }
 
+    const token = localStorage.getItem("access_token");
+
     axios
-      .get(`${API_BASE}/${sessionId}`)
+      .get(`${API_BASE}/${sessionId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       .then((res) => {
         if (res.data.success) {
           setSessionData(res.data.data);
@@ -153,7 +159,7 @@ const InterviewResult: React.FC = () => {
             fontWeight="bold"
             color="secondary.main"
           >
-            Sarah (Interviewer)
+            IMa (Interviewer)
           </Typography>
           <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.6 }}>
             {item.question}
@@ -228,7 +234,7 @@ const InterviewResult: React.FC = () => {
       {/* TOMBOL KEMBALI */}
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => navigate(-1)} // navigate(-1) akan kembali ke halaman riwayat sebelumnya
+        onClick={() => navigate("/history", { replace: true })} // <--- UBAH DI SINI
         sx={{
           mb: 2,
           color: "text.secondary",

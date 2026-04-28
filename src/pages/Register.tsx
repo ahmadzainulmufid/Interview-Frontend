@@ -104,7 +104,7 @@ const Register = () => {
 
         // Beri jeda sedikit sebelum pindah halaman agar toast sukses terlihat
         setTimeout(() => {
-          navigate("/login");
+          navigate("/");
         }, 1500);
       } else {
         showToast(`Gagal: ${data.msg}`, "error");
@@ -329,7 +329,7 @@ const Register = () => {
               <Typography variant="body2" color="text.secondary">
                 Sudah punya akun?{" "}
                 <Link
-                  to={loading ? "#" : "/login"} // Mencegah klik link saat loading
+                  to={loading ? "#" : "/"} // Mencegah klik link saat loading
                   style={{
                     textDecoration: "none",
                     color: loading ? "grey" : "#1976d2",

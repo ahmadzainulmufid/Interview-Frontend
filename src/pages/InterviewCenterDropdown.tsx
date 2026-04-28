@@ -13,12 +13,29 @@ import { useNavigate } from "react-router-dom";
 
 const API_BASE = "http://localhost:5001/";
 
+// 1. Define your data interfaces based on the properties you use
+interface Category {
+  id: string | number;
+  name: string;
+}
+
+interface Role {
+  id: string | number;
+  name: string;
+}
+
+interface Position {
+  id: string | number;
+  level: string;
+}
+
 const InterviewCenterDropdown: React.FC = () => {
   const navigate = useNavigate();
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
-  const [positions, setPositions] = useState<any[]>([]);
+  // 2. Replace 'any' with your new interfaces
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
 
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
@@ -26,7 +43,7 @@ const InterviewCenterDropdown: React.FC = () => {
 
   // 🔹 Fetch Categories (First Load)
   useEffect(() => {
-    axios.get(`${API_BASE}/categories`).then((res) => {
+    axios.get<Category[]>(`${API_BASE}/categories`).then((res) => {
       setCategories(res.data);
     });
   }, []);
@@ -36,7 +53,7 @@ const InterviewCenterDropdown: React.FC = () => {
     if (!selectedCategory) return;
 
     axios
-      .get(`${API_BASE}/roles?category_id=${selectedCategory}`)
+      .get<Role[]>(`${API_BASE}/roles?category_id=${selectedCategory}`)
       .then((res) => {
         setRoles(res.data);
         setSelectedRole("");
@@ -48,10 +65,12 @@ const InterviewCenterDropdown: React.FC = () => {
   useEffect(() => {
     if (!selectedRole) return;
 
-    axios.get(`${API_BASE}/positions?role_id=${selectedRole}`).then((res) => {
-      setPositions(res.data);
-      setSelectedPosition("");
-    });
+    axios
+      .get<Position[]>(`${API_BASE}/positions?role_id=${selectedRole}`)
+      .then((res) => {
+        setPositions(res.data);
+        setSelectedPosition("");
+      });
   }, [selectedRole]);
 
   const handleStartInterview = () => {

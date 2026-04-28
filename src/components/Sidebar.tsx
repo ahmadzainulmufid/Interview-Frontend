@@ -71,7 +71,7 @@ const Sidebar = () => {
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("user");
     setOpenLogoutDialog(false);
-    navigate("/login");
+    navigate("/");
   };
 
   const menuItems = [

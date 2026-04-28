@@ -12,6 +12,8 @@ import {
 } from "@mui/material";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import { useFocusDetection } from "../hooks/useFocusDetection";
+import { ToastContainer } from "react-toastify";
 
 // Icons
 import VideocamIcon from "@mui/icons-material/Videocam";
@@ -88,6 +90,8 @@ const Interview = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
 
+  useFocusDetection(videoRef, isCameraOn);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -143,10 +147,49 @@ const Interview = () => {
   }, [transcript, liveUserText]);
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
+    // JIKA WAKTU HABIS
+    if (timeLeft <= 0) {
+      const handleTimeout = async () => {
+        // 1. Matikan kamera dan mikrofon
+        stopCamera();
+        setAiState("thinking");
+
+        // 2. Beri tahu user lewat toast (Opsional, tapi bagus untuk UX)
+        toast.error("Waktu wawancara telah habis!", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+
+        try {
+          // 3. Tembak API Backend untuk memaksa sesi ditutup
+          if (sessionId) {
+            const token = localStorage.getItem("access_token");
+            await axios.post(
+              `${API_BASE}/end`,
+              { session_id: sessionId },
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+          }
+        } catch (error) {
+          console.error("Gagal menutup sesi di backend saat timeout", error);
+        }
+
+        // 4. Pindah ke halaman Result
+        navigate("/result", {
+          state: { sessionId: sessionId },
+          replace: true,
+        });
+      };
+
+      // Jalankan fungsi pengakhiran
+      handleTimeout();
+      return;
+    }
+
+    // JIKA WAKTU MASIH ADA (Hitung mundur berjalan)
     const timerId = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearInterval(timerId);
-  }, [timeLeft]);
+  }, [timeLeft, sessionId, navigate]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -159,10 +202,20 @@ const Interview = () => {
   const mulaiSesiAPI = async () => {
     setAiState("thinking");
     try {
-      const response = await axios.post(`${API_BASE}/start`, {
-        role: roleName,
-        level: levelName,
-      });
+      const token = localStorage.getItem("access_token");
+
+      const response = await axios.post(
+        `${API_BASE}/start`,
+        {
+          role: roleName,
+          level: levelName,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
 
       if (response.data.success) {
         const data = response.data.data;
@@ -252,8 +305,12 @@ const Interview = () => {
     formData.append("audio", audioBlob, "answer.webm");
 
     try {
+      const token = localStorage.getItem("access_token");
       const response = await axios.post(`${API_BASE}/answer/audio`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (response.data.success) {
@@ -319,7 +376,13 @@ const Interview = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          autoGainControl: true,
+          noiseSuppression: true,
+          channelCount: 1,
+          sampleRate: 16000,
+        },
       });
       streamRef.current = stream;
       setIsCameraOn(true);
@@ -374,6 +437,8 @@ const Interview = () => {
       }}
     >
       <CssBaseline />
+
+      <ToastContainer />
 
       {/* HEADER */}
       <Box
@@ -552,7 +617,7 @@ const Interview = () => {
                 <SmartToyIcon sx={{ fontSize: 50 }} />
               </Avatar>
               <Typography variant="h6" sx={{ mt: 2, fontWeight: "bold" }}>
-                Sarah (AI)
+                IMa
               </Typography>
               <Typography
                 variant="body2"
@@ -607,7 +672,7 @@ const Interview = () => {
                   }
                   sx={{ mt: 1, whiteSpace: "nowrap" }}
                 >
-                  {chat.sender === "AI" ? "Sarah (AI)" : username}
+                  {chat.sender === "AI" ? "IMa" : username}
                 </Typography>
                 <Box
                   sx={{
@@ -736,10 +801,26 @@ const Interview = () => {
           color="error"
           startIcon={<CallEndIcon />}
           sx={{ borderRadius: "20px", px: 3, py: 1, fontWeight: "bold" }}
-          onClick={() => {
+          onClick={async () => {
             stopCamera();
+            setAiState("thinking");
+
+            try {
+              if (sessionId) {
+                const token = localStorage.getItem("access_token");
+                await axios.post(
+                  `${API_BASE}/end`,
+                  { session_id: sessionId },
+                  { headers: { Authorization: `Bearer ${token}` } },
+                );
+              }
+            } catch (error) {
+              console.error("Gagal menutup sesi di backend", error);
+            }
+
             navigate("/result", {
-              state: { sessionId: sessionId, transcriptHistory: transcript },
+              state: { sessionId: sessionId },
+              replace: true,
             });
           }}
         >
