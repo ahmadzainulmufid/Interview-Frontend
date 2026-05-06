@@ -34,7 +34,7 @@ interface HistorySession {
   level: string;
   date: string;
   score: number; // <--- Sekarang mengambil skor dari backend
-  is_completed: boolean;
+  is_completed: boolean | number;
 }
 
 const History = () => {
@@ -52,7 +52,7 @@ const History = () => {
     const token = localStorage.getItem("access_token");
 
     axios
-      .get(`${API_BASE}/history`, {
+      .get(`${API_BASE}/history?t=${new Date().getTime()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -70,17 +70,18 @@ const History = () => {
       });
   }, []);
 
-  // LOGIKA SEARCH DAN FILTER BERFUNGSI
+  // LOGIKA SEARCH DAN FILTER BERFUNGSI (DIPERBARUI)
   const filteredHistory = historyList.filter((item) => {
-    // 1. Cek Search: Apakah Role mengandung teks yang diketik?
-    const matchSearch = item.role
+    const roleName = item.role || "";
+    const matchSearch = roleName
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
 
-    // 2. Cek Filter Level: Apakah Level sesuai dropdown? (Jika 'All', tampilkan semua)
     const matchLevel = filterLevel === "All" || item.level === filterLevel;
 
-    return item.is_completed && matchSearch && matchLevel;
+    const isCompleted = item.is_completed === true || item.is_completed === 1;
+
+    return isCompleted && matchSearch && matchLevel;
   });
 
   // LOGIKA KALKULASI STATISTIK KESELURUHAN

@@ -354,7 +354,7 @@ const Interview = () => {
           // Pindah ke halaman Result hanya dengan membawa Session ID
           setTimeout(() => {
             navigate("/result", { state: { sessionId: sessionId } });
-          }, 2000);
+          }, 7000);
           return;
         }
 

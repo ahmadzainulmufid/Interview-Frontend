@@ -244,7 +244,7 @@ const InterviewResult: React.FC = () => {
       {/* TOMBOL KEMBALI */}
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => navigate("/history", { replace: true })} // <--- UBAH DI SINI
+        onClick={() => navigate("/history", { replace: true })}
         sx={{
           mb: 2,
           color: "text.secondary",
