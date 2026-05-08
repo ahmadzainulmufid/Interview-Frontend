@@ -35,6 +35,11 @@ interface ChatMessage {
   text: string;
 }
 
+interface ISpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
 const TypewriterText = ({
   text,
   speed = 30,
@@ -215,7 +220,7 @@ const Interview = () => {
         }
       };
 
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+      recognitionRef.current.onresult = (event: ISpeechRecognitionEvent) => {
         let interimTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
