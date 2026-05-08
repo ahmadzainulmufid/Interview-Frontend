@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { toast } from "react-toastify";
 
 export const useFocusDetection = (
-  videoRef: React.RefObject<HTMLVideoElement>,
+  videoRef: RefObject<HTMLVideoElement | null>,
   isCameraOn: boolean,
 ) => {
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
@@ -67,7 +67,7 @@ export const useFocusDetection = (
   useEffect(() => {
     const detectFace = () => {
       if (
-        !videoRef.current ||
+        !videoRef?.current ||
         !faceLandmarkerRef.current ||
         !isCameraOn ||
         videoRef.current.readyState < 2

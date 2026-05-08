@@ -72,7 +72,7 @@ const Login = () => {
 
     try {
       // 2. Kirim Request ke Backend
-      const response = await fetch("http://127.0.0.1:5001/login", {
+      const response = await fetch(import.meta.env.VITE_API_BASE + "/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

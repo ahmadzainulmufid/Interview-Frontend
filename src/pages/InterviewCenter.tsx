@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -31,25 +31,23 @@ const steps = [
 ];
 
 const InterviewCenter: React.FC = () => {
-  // 1. Pindahkan useState ke DALAM komponen
-  // Kosongkan nama awalnya, nanti akan diisi oleh useEffect
-  const [username, setUsername] = useState("");
-
-  // 2. Ambil data nama asli pengguna dari localStorage
-  useEffect(() => {
+  const [username] = useState(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUsername(userData.username); // Set username sesuai yang login
-    } else {
-      setUsername("Calon Kandidat"); // Jika tidak ada data login
+      try {
+        const userData = JSON.parse(storedUser);
+        return userData.username;
+      } catch (error) {
+        console.error("Gagal parse data user:", error);
+        return "Calon Kandidat";
+      }
     }
-  }, []);
+    return "Calon Kandidat";
+  });
 
   return (
     <Box sx={{ width: "100%", p: 3 }}>
       <Box sx={{ mb: 4, textAlign: "left" }}>
-        {/* 3. Penulisan pemanggilan variabel yang benar: {username} tanpa lambang $ */}
         <Typography variant="h4" fontWeight="bold" gutterBottom>
           Halo, {username}! 👋
         </Typography>

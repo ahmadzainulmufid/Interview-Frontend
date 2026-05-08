@@ -17,7 +17,7 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import LightbulbCircleIcon from "@mui/icons-material/LightbulbCircle";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack"; // Icon untuk tombol Back
 
-const API_BASE = "http://localhost:5001";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface HistoryItem {
   stage: string;

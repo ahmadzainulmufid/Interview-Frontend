@@ -84,18 +84,21 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:5001/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        import.meta.env.VITE_API_BASE + "/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            username: username,
+            email: email,
+            password: password,
+            confirm_password: confirmPassword,
+          }),
         },
-        body: JSON.stringify({
-          username: username,
-          email: email,
-          password: password,
-          confirm_password: confirmPassword,
-        }),
-      });
+      );
 
       const data = await response.json();
 

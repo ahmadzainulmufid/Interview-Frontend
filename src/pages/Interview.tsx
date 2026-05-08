@@ -13,7 +13,7 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { useFocusDetection } from "../hooks/useFocusDetection";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 
 // Icons
 import VideocamIcon from "@mui/icons-material/Videocam";
@@ -27,7 +27,7 @@ import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import TimerIcon from "@mui/icons-material/Timer";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
-const API_BASE = "http://localhost:5001";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 interface ChatMessage {
   // Tambahkan "System" di sini untuk menampung Technical Gap
@@ -35,9 +35,6 @@ interface ChatMessage {
   text: string;
 }
 
-// ==========================================
-// KOMPONEN TYPEWRITER UNTUK AI
-// ==========================================
 const TypewriterText = ({
   text,
   speed = 30,
@@ -85,6 +82,7 @@ const Interview = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600);
+  const [hasInterviewStarted, setHasInterviewStarted] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -97,7 +95,100 @@ const Interview = () => {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const hasStarted = useRef(false);
 
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
+
+  const lastUserTranscriptRef = useRef("");
+
+  // const speakText = (text: string) => {
+  //   speechSynthesis.cancel();
+
+  //   const utterance = new SpeechSynthesisUtterance(text);
+
+  //   utterance.lang = "id-ID";
+  //   utterance.rate = 1;
+
+  //   setAiState("speaking");
+
+  //   utterance.onend = () => {
+  //     setAiState("idle");
+  //   };
+
+  //   speechSynthesis.speak(utterance);
+  // };
+
+  const playAiAudio = (audioPath: string) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+    }
+    setAiState("speaking");
+    const audio = new Audio(`${API_BASE}${audioPath}`);
+    currentAudioRef.current = audio;
+
+    audio.onended = () => {
+      if (!hasInterviewStarted) {
+        setHasInterviewStarted(true);
+      }
+      setAiState("listening");
+    };
+    audio.play().catch(() => setAiState("listening"));
+  };
+
+  const mulaiSesiAPI = async () => {
+    setAiState("thinking");
+    try {
+      const token = localStorage.getItem("access_token");
+
+      const response = await axios.post(
+        `${API_BASE}/start`,
+        {
+          role: roleName,
+          level: levelName,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (response.data.success) {
+        const data = response.data.data;
+        setSessionId(data.session_id);
+        setTranscript([{ sender: "AI", text: data.question }]);
+        playAiAudio(data.audio_url);
+      }
+    } catch (error) {
+      console.error("Gagal memulai sesi", error);
+      setAiState("idle");
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: {
+          echoCancellation: true,
+          autoGainControl: true,
+          noiseSuppression: true,
+          channelCount: 1,
+          sampleRate: 16000,
+        },
+      });
+      streamRef.current = stream;
+      setIsCameraOn(true);
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (error) {
+      console.error("Error akses media saat mengakses kamera/mikrofon:", error);
+      alert("Izin kamera/mikrofon ditolak");
+    }
+  };
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setIsCameraOn(false);
+  };
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -107,15 +198,24 @@ const Interview = () => {
 
     // SETUP WEB SPEECH API
     const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
       recognitionRef.current.lang = "id-ID";
 
-      recognitionRef.current.onresult = (event: any) => {
+      recognitionRef.current.onend = () => {
+        if (isRecording) {
+          try {
+            recognitionRef.current?.start();
+          } catch {
+            console.log("Recognition restart blocked");
+          }
+        }
+      };
+
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = "";
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
@@ -124,20 +224,28 @@ const Interview = () => {
             interimTranscript += event.results[i][0].transcript;
           }
         }
-        setLiveUserText(finalTranscriptRef.current + interimTranscript);
+        const currentText = finalTranscriptRef.current + interimTranscript;
+
+        setLiveUserText(currentText);
+        lastUserTranscriptRef.current = currentText;
       };
     }
 
     if (!hasStarted.current) {
       hasStarted.current = true;
-      mulaiSesiAPI();
-      startCamera();
-    }
 
+      const initInterview = async () => {
+        await startCamera();
+        await mulaiSesiAPI();
+      };
+
+      initInterview();
+    }
     return () => {
       if (currentAudioRef.current) currentAudioRef.current.pause();
       stopCamera();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -147,6 +255,7 @@ const Interview = () => {
   }, [transcript, liveUserText]);
 
   useEffect(() => {
+    if (!hasInterviewStarted) return;
     // JIKA WAKTU HABIS
     if (timeLeft <= 0) {
       const handleTimeout = async () => {
@@ -189,7 +298,7 @@ const Interview = () => {
     // JIKA WAKTU MASIH ADA (Hitung mundur berjalan)
     const timerId = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearInterval(timerId);
-  }, [timeLeft, sessionId, navigate]);
+  }, [hasInterviewStarted, timeLeft, sessionId, navigate]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -197,50 +306,6 @@ const Interview = () => {
       .padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
-  };
-
-  const mulaiSesiAPI = async () => {
-    setAiState("thinking");
-    try {
-      const token = localStorage.getItem("access_token");
-
-      const response = await axios.post(
-        `${API_BASE}/start`,
-        {
-          role: roleName,
-          level: levelName,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (response.data.success) {
-        const data = response.data.data;
-        setSessionId(data.session_id);
-        setTranscript([{ sender: "AI", text: data.question }]);
-        playAiAudio(data.audio_url);
-      }
-    } catch (error) {
-      console.error("Gagal memulai sesi", error);
-      setAiState("idle");
-    }
-  };
-
-  const playAiAudio = (audioPath: string) => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-    }
-    setAiState("speaking");
-    const audio = new Audio(`${API_BASE}${audioPath}`);
-    currentAudioRef.current = audio;
-
-    audio.onended = () => {
-      setAiState("listening");
-    };
-    audio.play().catch(() => setAiState("listening"));
   };
 
   const toggleRecording = () => {
@@ -282,7 +347,11 @@ const Interview = () => {
       setIsRecording(false);
       setAiState("thinking");
 
-      if (recognitionRef.current) recognitionRef.current.stop();
+      setTimeout(() => {
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+      }, 1200);
     }
   };
 
@@ -322,13 +391,21 @@ const Interview = () => {
           "terimakasih.",
           "subtitles by",
         ];
-        if (
-          hallucinationWords.some((word) =>
-            finalTranscript.toLowerCase().includes(word),
-          )
-        ) {
-          finalTranscript = liveUserText || "Jawaban kurang jelas.";
-        }
+
+        let cleanedTranscript = finalTranscript.trim();
+
+        hallucinationWords.forEach((word) => {
+          const regex = new RegExp(`${word}$`, "i");
+
+          cleanedTranscript = cleanedTranscript.replace(regex, "").trim();
+        });
+
+        finalTranscript =
+          cleanedTranscript ||
+          lastUserTranscriptRef.current.trim() ||
+          liveUserText.trim() ||
+          finalTranscriptRef.current.trim() ||
+          "Jawaban kurang jelas.";
 
         const responseData = response.data.data;
 
@@ -339,17 +416,23 @@ const Interview = () => {
         ]);
         setLiveUserText("");
         finalTranscriptRef.current = "";
+        lastUserTranscriptRef.current = "";
 
         // 2. CEK JIKA WAWANCARA SELESAI
         if (responseData.stage === "Completed") {
+          const closingText =
+            "Terima kasih, wawancara telah selesai. Kami akan memproses laporan Anda.";
+
           setTranscript((prev) => [
             ...prev,
             {
               sender: "AI",
-              text: "Terima kasih, wawancara telah selesai. Kami akan memproses laporan Anda.",
+              text: closingText,
             },
           ]);
-          setAiState("idle");
+
+          // speakText(closingText);
+          playAiAudio(responseData.closing_audio);
 
           // Pindah ke halaman Result hanya dengan membawa Session ID
           setTimeout(() => {
@@ -366,36 +449,11 @@ const Interview = () => {
         playAiAudio(responseData.audio_url);
       }
     } catch (error) {
+      console.error("Gagal mengirim audio ke API", error);
       setAiState("listening");
       setLiveUserText("");
       finalTranscriptRef.current = "";
     }
-  };
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: {
-          echoCancellation: true,
-          autoGainControl: true,
-          noiseSuppression: true,
-          channelCount: 1,
-          sampleRate: 16000,
-        },
-      });
-      streamRef.current = stream;
-      setIsCameraOn(true);
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (error) {
-      alert("Izin kamera/mikrofon ditolak");
-    }
-  };
-
-  const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    setIsCameraOn(false);
   };
 
   const renderAiStatus = () => {

@@ -11,7 +11,7 @@ import {
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = "http://localhost:5001/";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 // 1. Define your data interfaces based on the properties you use
 interface Category {
