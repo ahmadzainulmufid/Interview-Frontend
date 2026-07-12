@@ -23,8 +23,6 @@ import SearchIcon from "@mui/icons-material/Search";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import AssessmentIcon from "@mui/icons-material/Assessment";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -85,14 +83,6 @@ const History = () => {
   });
 
   // LOGIKA KALKULASI STATISTIK KESELURUHAN
-  const totalInterviews = filteredHistory.length;
-  const overallAverageScore =
-    totalInterviews > 0
-      ? Math.round(
-          filteredHistory.reduce((acc, curr) => acc + curr.score, 0) /
-            totalInterviews,
-        )
-      : 0;
 
   // Handler Menu Filter
   const handleOpenFilter = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -108,13 +98,6 @@ const History = () => {
     navigate("/result", {
       state: { sessionId: sessionId },
     });
-  };
-
-  // Helper warna skor
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "success.main";
-    if (score >= 60) return "primary.main";
-    return "warning.main";
   };
 
   if (loading) {
@@ -135,80 +118,6 @@ const History = () => {
         <Typography variant="body1" color="text.secondary" mb={4}>
           Tinjau kembali kinerja masa lalu Anda dan analisis AI.
         </Typography>
-
-        {/* KARTU STATISTIK KESELURUHAN */}
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <Paper
-              elevation={2}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Avatar
-                sx={{
-                  bgcolor: "primary.light",
-                  color: "primary.main",
-                  width: 56,
-                  height: 56,
-                }}
-              >
-                <AssessmentIcon fontSize="large" />
-              </Avatar>
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight="bold"
-                >
-                  Total Wawancara
-                </Typography>
-                <Typography variant="h4" fontWeight="bold">
-                  {totalInterviews}
-                </Typography>
-              </Box>
-            </Paper>
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <Paper
-              elevation={2}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Avatar
-                sx={{
-                  bgcolor: "success.light",
-                  color: "success.main",
-                  width: 56,
-                  height: 56,
-                }}
-              >
-                <TrendingUpIcon fontSize="large" />
-              </Avatar>
-              <Box>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontWeight="bold"
-                >
-                  Rata-rata Skor Keseluruhan
-                </Typography>
-                <Typography variant="h4" fontWeight="bold" color="success.main">
-                  {overallAverageScore}%
-                </Typography>
-              </Box>
-            </Paper>
-          </Grid>
-        </Grid>
       </Box>
 
       {/* 2. SEARCH & FILTER BAR */}
@@ -336,32 +245,6 @@ const History = () => {
                     <Chip label={item.level} size="small" variant="outlined" />
                   </Stack>
                 </Box>
-              </Box>
-
-              {/* Tengah: Skor Spesifik Sesi */}
-              <Box
-                sx={{
-                  textAlign: "center",
-                  minWidth: 100,
-                  borderLeft: { sm: "1px solid #eee" },
-                  borderRight: { sm: "1px solid #eee" },
-                  px: { sm: 3 },
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                >
-                  Nilai Sesi
-                </Typography>
-                <Typography
-                  variant="h5"
-                  fontWeight="bold"
-                  color={getScoreColor(item.score)}
-                >
-                  {item.score}%
-                </Typography>
               </Box>
 
               {/* Kanan: Button Arahkan ke Result */}

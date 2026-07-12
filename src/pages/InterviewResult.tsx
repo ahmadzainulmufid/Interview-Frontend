@@ -15,7 +15,7 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import LightbulbCircleIcon from "@mui/icons-material/LightbulbCircle";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack"; // Icon untuk tombol Back
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
@@ -101,7 +101,6 @@ const InterviewResult: React.FC = () => {
       </Typography>
     );
 
-  // Filter History berdasarkan Stage
   const openingHistory = sessionData.history.filter(
     (h) => h.stage === "Opening",
   );
@@ -110,7 +109,7 @@ const InterviewResult: React.FC = () => {
   );
   const caseHistory = sessionData.history.filter(
     (h) =>
-      h.stage === "Study Case" ||
+      h.stage === "Case Study" ||
       h.stage === "Soft Skill" ||
       h.stage === "Behavioral",
   );
@@ -146,10 +145,8 @@ const InterviewResult: React.FC = () => {
     });
   };
 
-  // Komponen Reusable untuk Render Q&A Block
   const renderQnABlock = (item: HistoryItem, index: number) => (
     <Box key={index} sx={{ mb: 4 }}>
-      {/* Pertanyaan AI */}
       <Box
         sx={{
           display: "flex",
@@ -177,7 +174,6 @@ const InterviewResult: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Jawaban User */}
       <Box
         sx={{
           display: "flex",
@@ -202,7 +198,6 @@ const InterviewResult: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Technical Gap / Evaluasi */}
       <Box
         sx={{
           ml: 8,
@@ -213,6 +208,7 @@ const InterviewResult: React.FC = () => {
           display: "flex",
           gap: 1.5,
           alignItems: "flex-start",
+          flexDirection: "column",
         }}
       >
         <LightbulbCircleIcon sx={{ color: "#ff8f00", mt: 0.5 }} />
@@ -230,7 +226,7 @@ const InterviewResult: React.FC = () => {
             color="text.secondary"
             sx={{ fontStyle: "italic", lineHeight: 1.6 }}
           >
-            Score: <strong>{item.score}/100</strong> | {item.feedback}
+            Score: <strong>{item.score}</strong> | {item.feedback}
           </Typography>
         </Box>
       </Box>
@@ -241,7 +237,6 @@ const InterviewResult: React.FC = () => {
     <Box
       sx={{ maxWidth: 1200, mx: "auto", mt: 2, mb: 8, px: { xs: 2, md: 4 } }}
     >
-      {/* TOMBOL KEMBALI */}
       <Button
         startIcon={<ArrowBackIcon />}
         onClick={() => navigate("/history", { replace: true })}
@@ -255,7 +250,6 @@ const InterviewResult: React.FC = () => {
         Kembali ke Riwayat
       </Button>
 
-      {/* HEADER */}
       <Paper
         elevation={3}
         sx={{
@@ -284,7 +278,6 @@ const InterviewResult: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* FINAL REPORT */}
       <Paper
         elevation={3}
         sx={{
@@ -309,13 +302,11 @@ const InterviewResult: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* TRANSKRIP TERPISAH BERDASARKAN STAGE */}
       <Paper elevation={3} sx={{ p: 4, borderRadius: "16px" }}>
         <Typography variant="h5" fontWeight="bold" mb={3}>
           📝 Riwayat Transkrip Lengkap
         </Typography>
 
-        {/* OPENING SECTION */}
         {openingHistory.length > 0 && (
           <Box sx={{ mb: 5 }}>
             <Divider sx={{ mb: 2 }}>
@@ -325,7 +316,6 @@ const InterviewResult: React.FC = () => {
           </Box>
         )}
 
-        {/* TECHNICAL SECTION */}
         {technicalHistory.length > 0 && (
           <Box sx={{ mb: 5 }}>
             <Divider sx={{ mb: 2 }}>
@@ -335,7 +325,6 @@ const InterviewResult: React.FC = () => {
           </Box>
         )}
 
-        {/* STUDY CASE SECTION */}
         {caseHistory.length > 0 && (
           <Box sx={{ mb: 2 }}>
             <Divider sx={{ mb: 2 }}>

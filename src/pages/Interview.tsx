@@ -426,7 +426,7 @@ const Interview = () => {
         // 2. CEK JIKA WAWANCARA SELESAI
         if (responseData.stage === "Completed") {
           const closingText =
-            "Terima kasih, wawancara telah selesai. Kami akan memproses laporan Anda.";
+            "Terima kasih, wawancara telah selesai. Kami akan memproses wawancara Anda.";
 
           setTranscript((prev) => [
             ...prev,
